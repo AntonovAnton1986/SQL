@@ -1,0 +1,162 @@
+-- 1. Создание базы данных
+CREATE DATABASE "DevDB2025_antonov";
+
+-- !!! В DBeaver после этого подключитесь к новой базе "DevDB2025_antonov" !!!
+-- Выполните следующий код уже внутри неё:
+
+-- 2. Таблицы
+
+-- Таблица моделей транспорта
+CREATE TABLE Models (
+    model_id SERIAL PRIMARY KEY,
+    model_name VARCHAR(100) NOT NULL UNIQUE,
+    manufacturer VARCHAR(100),
+    seat_capacity INT NOT NULL CHECK (seat_capacity > 0)
+);
+
+-- Таблица транспортных средств
+CREATE TABLE Vehicles (
+    vehicle_id SERIAL PRIMARY KEY,
+    registration_number VARCHAR(20) NOT NULL UNIQUE,
+    model_id INT NOT NULL REFERENCES Models(model_id) ON DELETE CASCADE,
+    driver_name VARCHAR(100) NOT NULL,
+    status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active','repair','inactive'))
+);
+
+-- Таблица мест
+CREATE TABLE Seats (
+    seat_id SERIAL PRIMARY KEY,
+    vehicle_id INT NOT NULL REFERENCES Vehicles(vehicle_id) ON DELETE CASCADE,
+    seat_number INT NOT NULL,
+    CONSTRAINT uq_vehicle_seat UNIQUE (vehicle_id, seat_number)
+);
+
+-- Таблица маршрутов
+CREATE TABLE Routes (
+    route_id SERIAL PRIMARY KEY,
+    origin VARCHAR(100) NOT NULL,
+    destination VARCHAR(100) NOT NULL,
+    distance_km NUMERIC(6,1) CHECK (distance_km > 0)
+);
+
+-- Таблица рейсов
+CREATE TABLE Trips (
+    trip_id SERIAL PRIMARY KEY,
+    vehicle_id INT NOT NULL REFERENCES Vehicles(vehicle_id) ON DELETE CASCADE,
+    route_id INT NOT NULL REFERENCES Routes(route_id) ON DELETE CASCADE,
+    date_time_departure TIMESTAMP NOT NULL,
+    CONSTRAINT chk_trip_time CHECK (arrival_time > departure_time)
+);
+
+-- Таблица билетов
+CREATE TABLE Tickets (
+    ticket_id SERIAL PRIMARY KEY,
+    trip_id INT NOT NULL REFERENCES Trips(trip_id) ON DELETE CASCADE,
+    seat_id INT NOT NULL REFERENCES Seats(seat_id) ON DELETE CASCADE,
+    passenger_name VARCHAR(100) NOT NULL,
+    price NUMERIC(8,2) NOT NULL CHECK (price > 0),
+    CONSTRAINT uq_trip_seat UNIQUE (trip_id, seat_id)
+);
+
+-- 3. Представления
+
+-- Список пассажиров на предстоящие поездки
+CREATE VIEW v_passengers_upcoming AS
+SELECT 
+    r.origin,
+    r.destination,
+    m.model_name,
+    v.registration_number,
+    v.driver_name,
+    t.passenger_name,
+    s.seat_number,
+    tr.departure_time
+FROM Tickets t
+JOIN Trips tr ON t.trip_id = tr.trip_id
+JOIN Routes r ON tr.route_id = r.route_id
+JOIN Vehicles v ON tr.vehicle_id = v.vehicle_id
+JOIN Models m ON v.model_id = m.model_id
+JOIN Seats s ON t.seat_id = s.seat_id
+WHERE tr.departure_time > NOW();
+
+-- Загрузка транспорта по рейсам
+CREATE VIEW v_trip_load AS
+SELECT 
+    tr.trip_id,
+    r.origin,
+    r.destination,
+    tr.departure_time,
+    COUNT(t.ticket_id) AS booked_seats,
+    m.seat_capacity AS total_seats,
+    ROUND(100.0 * COUNT(t.ticket_id) / m.seat_capacity, 2) AS load_percent
+FROM Trips tr
+JOIN Routes r ON tr.route_id = r.route_id
+JOIN Vehicles v ON tr.vehicle_id = v.vehicle_id
+JOIN Models m ON v.model_id = m.model_id
+LEFT JOIN Tickets t ON tr.trip_id = t.trip_id
+GROUP BY tr.trip_id, r.origin, r.destination, tr.departure_time, m.seat_capacity;
+⚡ После выполнения у вас будет:
+
+6 таблиц (Models, Vehicles, Seats, Routes, Trips, Tickets)
+
+все ключи и ограничения (PK, FK, UNIQUE, CHECK, DEFAULT)
+
+2 представления:
+
+v_passengers_upcoming → список пассажиров с деталями рейса
+
+v_trip_load → загрузка рейсов
+
+
+
+-- Таблица моделей транспорта
+CREATE TABLE Models (
+    model_id SERIAL PRIMARY KEY,
+    year INT NOT NULL CHECK (year > 1900),
+    life_years INT NOT NULL CHECK (life_years > 0),
+    max_milleage INT NOT NULL CHECK (max_milleage > 0)
+);
+
+-- Таблица транспортных средств
+CREATE TABLE Vehicles (
+    vehicle_id SERIAL PRIMARY KEY,
+    model_id INT NOT NULL REFERENCES Models(model_id) ON DELETE CASCADE,
+    serial_number VARCHAR(50) NOT NULL UNIQUE,
+    lisence_plate VARCHAR(20) NOT NULL UNIQUE
+);
+
+-- Таблица мест
+CREATE TABLE Seats (
+    seat_id SERIAL PRIMARY KEY,
+    vehicle_id INT NOT NULL REFERENCES Vehicles(vehicle_id) ON DELETE CASCADE,
+    seat_number INT NOT NULL,
+    CONSTRAINT uq_vehicle_seat UNIQUE (vehicle_id, seat_number)
+);
+
+-- Таблица маршрутов
+CREATE TABLE Routes (
+    route_id SERIAL PRIMARY KEY,
+    start_city VARCHAR(100) NOT NULL,
+    end_city VARCHAR(100) NOT NULL,
+    distance NUMERIC(6,1) NOT NULL CHECK (distance > 0)
+);
+
+-- Таблица рейсов
+CREATE TABLE Trips (
+    trip_id SERIAL PRIMARY KEY,
+    route_id INT NOT NULL REFERENCES Routes(route_id) ON DELETE CASCADE,
+    vehicle_id INT NOT NULL REFERENCES Vehicles(vehicle_id) ON DELETE CASCADE,
+    driver_name VARCHAR(100) NOT NULL,
+    date_time_departure TIMESTAMP NOT NULL,
+    duration INTERVAL NOT NULL
+);
+
+-- Таблица билетов
+CREATE TABLE Tickets (
+    ticket_id SERIAL PRIMARY KEY,
+    trip_id INT NOT NULL REFERENCES Trips(trip_id) ON DELETE CASCADE,
+    seat_id INT NOT NULL REFERENCES Seats(seat_id) ON DELETE CASCADE,
+    passenger_name VARCHAR(100) NOT NULL,
+    price NUMERIC(8,2) NOT NULL CHECK (price > 0),
+    CONSTRAINT uq_trip_seat UNIQUE (trip_id, seat_id)
+);
